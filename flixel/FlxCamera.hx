@@ -1,3 +1,8 @@
+
+/**
+ * Based on https://github.com/FunkinCrew/flixel/blob/a7d8e3bad89a0a3506a4714121f73d8e34522c49/flixel/FlxCamera.hx
+ * .rotation Modification by cyn0x8 - https://github.com/FunkinCrew/flixel/pull/2
+**/
 package flixel;
 
 import openfl.display.Bitmap;
@@ -39,6 +44,7 @@ private typedef FlxDrawItem = flixel.graphics.tile.FlxDrawQuadsItem;
  *     |-> `_scrollRect:Sprite` (which is used for cropping camera's graphic, mostly in tile render mode)
  *         |-> `_flashBitmap:Bitmap`  (its bitmapData property is buffer BitmapData, this var is used in blit render mode.
  *                                    Everything is rendered on buffer in blit render mode)
+ *  |-> `_rotationCanvas:Sprite` (used for rendering rotated camera in tile render mode)
  *         |-> `canvas:Sprite`        (its graphics is used for rendering objects in tile render mode)
  *         |-> `debugLayer:Sprite`    (this sprite is used in tile render mode for rendering debug info, like bounding boxes)
  */
@@ -363,6 +369,11 @@ class FlxCamera extends FlxBasic
 	public var angle(default, set):Float = 0;
 
 	/**
+	 * The camera's world rotation in degrees.
+	 */
+	public var rotation(default, set):Float = 0;
+
+	/**
 	 * The color tint of the camera display.
 	 */
 	public var color(default, set):FlxColor = FlxColor.WHITE;
@@ -535,6 +546,11 @@ class FlxCamera extends FlxBasic
 	 * Its position is modified by `updateInternalSpritePositions()`, which is called on camera's resize and scale events.
 	 */
 	public var canvas:Sprite;
+
+	/**
+	 * Internal, used for rendering rotated camera in tile render mode.
+	 */
+	var _rotationCanvas:Sprite;
 
 	#if FLX_DEBUG
 	/**
@@ -1060,12 +1076,14 @@ class FlxCamera extends FlxBasic
 		}
 		else
 		{
+			_rotationCanvas = new Sprite();
+			_scrollRect.addChild(_rotationCanvas);
 			canvas = new Sprite();
-			_scrollRect.addChild(canvas);
+			_rotationCanvas.addChild(canvas);
 
 			#if FLX_DEBUG
 			debugLayer = new Sprite();
-			_scrollRect.addChild(debugLayer);
+			_rotationCanvas.addChild(debugLayer);
 			#end
 		}
 
@@ -1098,13 +1116,15 @@ class FlxCamera extends FlxBasic
 			_fill = FlxDestroyUtil.dispose(_fill);
 		}
 		else
-		{
+		{			
+			FlxDestroyUtil.removeChild(_scrollRect, _rotationCanvas);
+			
 			#if FLX_DEBUG
-			FlxDestroyUtil.removeChild(_scrollRect, debugLayer);
+			FlxDestroyUtil.removeChild(_rotationCanvas, debugLayer);
 			debugLayer = null;
 			#end
 
-			FlxDestroyUtil.removeChild(_scrollRect, canvas);
+			FlxDestroyUtil.removeChild(_rotationCanvas, canvas);
 			if (canvas != null)
 			{
 				for (i in 0...canvas.numChildren)
@@ -1122,6 +1142,7 @@ class FlxCamera extends FlxBasic
 			_blitMatrix = null;
 			_helperMatrix = null;
 			_helperPoint = null;
+			_rotationCanvas = null;
 		}
 
 		_bounds = null;
@@ -2020,6 +2041,23 @@ class FlxCamera extends FlxBasic
 		return Angle;
 	}
 
+	function set_rotation(Rotation:Float):Float
+	{
+		rotation = Rotation;
+
+		@:privateAccess if (!FlxG.renderBlit) {
+			_rotationCanvas.__transform.identity();
+			_rotationCanvas.__transform.translate(-width / 2, -height / 2);
+			_rotationCanvas.__transform.rotate(Rotation * Math.PI / 180);
+			_rotationCanvas.__transform.translate(width / 2, height / 2);
+		}
+
+		calcMarginX();
+		calcMarginY();
+
+		return Rotation;
+	}
+
 	function set_color(Color:FlxColor):FlxColor
 	{
 		color = Color;
@@ -2095,12 +2133,38 @@ class FlxCamera extends FlxBasic
 	
 	inline function calcMarginX():Void
 	{
-		viewMarginX = 0.5 * width * (scaleX - initialZoom) / scaleX;
+		if (!FlxG.renderBlit && rotation % 360 != 0)
+		{
+			final rotatedBounds:FlxRect = FlxRect.weak(0, 0, width, height);
+			rotatedBounds.getRotatedBounds(rotation, null, rotatedBounds);
+
+			final rotatedScaleX:Float = width / rotatedBounds.width * scaleX;
+			viewMarginX = 0.5 * width * (rotatedScaleX - initialZoom) / rotatedScaleX;
+
+			rotatedBounds.putWeak();
+		}
+		else
+		{
+			viewMarginX = 0.5 * width * (scaleX - initialZoom) / scaleX;
+		}
 	}
 
 	inline function calcMarginY():Void
 	{
-		viewMarginY = 0.5 * height * (scaleY - initialZoom) / scaleY;
+		if (!FlxG.renderBlit && rotation % 360 != 0)
+		{
+			final rotatedBounds:FlxRect = FlxRect.weak(0, 0, width, height);
+			rotatedBounds.getRotatedBounds(rotation, null, rotatedBounds);
+
+			final rotatedScaleY:Float = height / rotatedBounds.height * scaleY;
+			viewMarginY = 0.5 * height * (rotatedScaleY - initialZoom) / rotatedScaleY;
+
+			rotatedBounds.putWeak();
+		}
+		else
+		{
+			viewMarginY = 0.5 * height * (scaleY - initialZoom) / scaleY;
+		}
 	}
 	
 	static inline function get_defaultCameras():Array<FlxCamera>

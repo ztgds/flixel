@@ -1117,14 +1117,7 @@ class FlxObject extends FlxBasic
 		return (x + width > FlxG.worldBounds.x) && (x < FlxG.worldBounds.right) && (y + height > FlxG.worldBounds.y) && (y < FlxG.worldBounds.bottom);
 	}
 
-	/**
-	 * Returns the screen position of this object.
-	 *
-	 * @param   result  Optional arg for the returning point
-	 * @param   camera  The desired "screen" coordinate space. If `null`, `FlxG.camera` is used.
-	 * @return  The screen position of this object.
-	 */
-	public function getScreenPosition(?result:FlxPoint, ?camera:FlxCamera):FlxPoint
+    public function getScreenPosition(?result:FlxPoint, ?camera:FlxCamera):FlxPoint
 	{
 		if (result == null)
 			result = FlxPoint.get();
@@ -1135,8 +1128,9 @@ class FlxObject extends FlxBasic
 		result.set(x, y);
 		if (pixelPerfectPosition)
 			result.floor();
+		result.subtract(camera.scroll.x * scrollFactor.x, camera.scroll.y * scrollFactor.y);
 
-		return result.subtract(camera.scroll.x * scrollFactor.x, camera.scroll.y * scrollFactor.y);
+		return camera.alterScreenPosition(this, result);
 	}
 
 	/**
